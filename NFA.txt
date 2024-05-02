@@ -1,0 +1,207 @@
+/***********-------------------                 NFA                 -------------------***************
+ * *Name: Marian Rempola
+ * Date: 05 April 2024
+ * Class: CMPSC 464 
+ * Project: Simulate a DFA and a NFA given a .txt file
+ * 
+ * First : first line has str of chars allowed in Alphabet
+ * Second : second line has number of states n, followed by n lines each containing names of states
+ * Third : start state
+ * Fourth : number of accept states m, followed by m lines each containing names of accept states
+ * Fifth: number of transitions t, followed by t lines of transitions (from P to Q on reading L)
+ *   form: <P>,<Q> = from list of states; <L> = from Alphabet and can be epsilon
+ * 
+ * Goal: given file with FA and str w, decides if the FA will accept w
+ * ************************************/ 
+
+import java.io.*;
+import java.util.*;
+
+/******************   HELPER CLASSES *******************/
+
+//Creates a class Transition that creates a 'Transition' object to help break up the transtion descriptions
+class Transition {
+    //<P>,<Q>,<L>
+    String stateFrom;
+    String stateTo;
+    String input;
+
+    //constructor of Transition class
+    public Transition (String stateFrom, String stateTo, String input) {
+        //init variables
+        this.stateFrom = stateFrom;
+        this.stateTo = stateTo;
+        this.input = input;
+    }
+}
+
+//set all of the components of the 5-tuple DFA/NFA
+class Automata {
+    Set<String> alphabet;
+    Set<String> states;
+    String startState;
+    Set<String> acceptStates;
+    List<Transition> transitions;
+
+    //constructor of Automata class
+    Automata() {
+        alphabet = new HashSet<>();
+        states = new HashSet<>();
+        acceptStates = new HashSet<>();
+        transitions = new ArrayList<>();
+    }
+}
+
+
+/******************   MAIN CLASS (SIMULATION) *******************/
+
+public class MRempolaNFA {
+    public static void main(String[] args) {
+
+        /**************************** NFA ******************************/
+        //Open path to the NFA descriptor file --> create NFA by calling helper function
+        Automata nfa = readAutomata("nfadesc.txt");
+
+        //Ask for input w 
+        System.out.print("Enter input string to test if it belongs in the NFA: ");
+        //Read w
+        Scanner scanner = new Scanner(System.in);
+        String input = scanner.nextLine();
+        //close scanner
+        scanner.close();
+
+        /* Simualte NFA by calling helper function */
+        boolean accepted = simulateNFA(nfa, input);
+        if (accepted == true) {
+            System.out.println("Input was ACCEPTED in NFA");
+        } else {
+            System.out.println("Input was REJECTED in NFA");
+        }
+    }
+    
+    /**************************** HELPER FUNCTIONS ******************************/
+    /*---- Read DFA or NFA and separate into 5-tuple accordingly by reading a file as a param.----*/
+
+    private static Automata readAutomata(String file) {
+        //create new Automata object
+        Automata automata = new Automata();
+
+        try {
+            //open path to file descriptor 
+            Scanner scanner = new Scanner(new File(file));
+
+            //1. Read Alphabet
+            String alphabet = scanner.nextLine();
+            //assign alphabet to automata
+            for (char c : alphabet.toCharArray()) {
+                //add every symbol of the alphabet array in the alphabet of the automata!! 
+                automata.alphabet.add(String.valueOf(c));
+            }
+
+            //2. Read States (n is the number of states)
+            int n = Integer.parseInt(scanner.nextLine());
+            //for n lines, read each and assign it to the states of the automata
+            for(int i = 0; i < n; i++) {
+                automata.states.add(scanner.nextLine());
+            }
+
+            //3. Read and Assign Start State to automata
+            automata.startState = scanner.nextLine();
+
+            //4. Read Accept States (m is the number of accept states)
+            int m = Integer.parseInt(scanner.nextLine());
+            //for m lines, read each and assign it to the states of the automata
+            for(int i = 0; i < m; i++) {
+                automata.acceptStates.add(scanner.nextLine());
+            }
+
+            //5. Read Transitions (t is the number of transitions)
+            int t = Integer.parseInt(scanner.nextLine());
+            //for t lines, read each and assign it to the states of the automata
+            for(int i = 0; i < t; i++) {
+                //each line contains a description of transition --> Call Transition method (in helper classes) and separate PQL
+                String[] tDescription = scanner.nextLine().split(",");
+                //create new Transition object based on <P>, <Q>, <L>
+                Transition transition = new Transition(tDescription[0], tDescription[1], tDescription[2]);
+                //assign to automata
+                automata.transitions.add(transition);
+            }
+
+            //Close Scanner
+            scanner.close();
+        } 
+        catch(FileNotFoundException e) {
+            e.printStackTrace(); //This will print the error and stack to show where it went wrong // how file was not found! :) 
+        }
+
+        //Returning Automata back to Simulation part of code!
+        return automata;
+    }
+
+    /*---- [SIMULATE NFA] to see if it accepts input string w!! True = accepts w, False o/w----*/
+    private static boolean simulateNFA(Automata automata, String w) {
+        //Var to keep track of current state: diff is that it can go to multiple states!
+        Set<String> currentStates = new HashSet<>();
+        //start at start state
+        currentStates.add(automata.startState);
+        //another difference is that NFAs have epsilon transitions
+        epsilonTransition(automata, currentStates);
+
+        //See where input w lies!
+        for(char symbol : w.toCharArray()) {
+            //Go to next states according to input w (can be multiple for NFAs)
+            Set<String> nextStates = new HashSet<>();
+            for (String state : currentStates) {
+                //find next state
+                for (Transition transition : automata.transitions) {
+                    //traverse through every transition to check state location and corresponding transition
+                    if(transition.stateFrom.equals(state) && transition.input.equals(String.valueOf(symbol))) {
+                        //if state & transition is found --> add to next state to keep going
+                        nextStates.add(transition.stateTo);
+                        //check for epsilon transitions
+                        epsilonTransition(automata, nextStates);
+                    }
+                }
+            }
+            currentStates = nextStates;
+        }
+
+        //See if w ends in an accept state
+        for (String state : currentStates) {
+            if (automata.acceptStates.contains(state)) {
+                return true;
+            }
+        }
+        //w is not found in an accept state
+        return false;
+    }
+
+    /*---- For NFA! --> NFA is similar to DFA but it accepts epsilon transitions and has multiple paths ----*/
+    private static void epsilonTransition(Automata automata, Set<String> states) {
+        //these are the new states for epsilon transitions 
+        Set<String> newStates = new HashSet<>(states);
+        //var to keep track of whether the set of transitions have been updated
+        boolean updated;
+        
+        do{
+            updated = false;
+            Set<String> additionalStates = new HashSet<>();    
+            //check every state to see if it has epsilon transitions
+            for (String state : newStates) {
+                for (Transition transition : automata.transitions) {
+                    //if input 'w' is EPSILON and we're at a particular state --> add epsilon transition
+                    if (transition.stateFrom.equals(state) && transition.input.equals("EPSILON") && !newStates.contains(transition.stateTo)) {
+                        //go to another state (epsilon transitions)
+                        additionalStates.add(transition.stateTo);
+                        updated = true;
+                    }
+                }
+            }
+            //add all updated epsilon transitions (this is in addition to the original path)
+            newStates.addAll(additionalStates);
+        } while (updated);
+        
+        //make sure to update NFA pah for epsilon transitions
+        states.addAll(newStates);
+    }
+}
